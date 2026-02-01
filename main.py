@@ -25,7 +25,9 @@ def prompt_client(prompt, key):
     client = genai.Client(api_key=key)
 
     messages = [types.Content(role="user", parts=[types.Part(text=prompt.user_prompt)])]
+    count = 0
     for _ in range(20):
+        count += 1
         res = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=messages,
@@ -35,31 +37,42 @@ def prompt_client(prompt, key):
             )
         )
 
+        if res.candidates is not None:
+            for c in res.candidates:
+                messages.append(c.content)
+
         if res.usage_metadata == None:
             raise RuntimeError("Response failed...")
+
 
         if prompt.verbose:
             print(f"User prompt: {prompt.user_prompt}")
             print(f"Prompt tokens: {res.usage_metadata.prompt_token_count}")
             print(f"Response tokens: {res.usage_metadata.candidates_token_count}")
 
-            if res.function_calls is not None:
-                for call in res.function_calls:
-                    print(f"Calling function: {call.name}({call.args})")
-                    func_res = call_function(call)
-                    # print(func_res)
+        if not res.function_calls:
+            print("Response:")
+            print(res.text)
+            return
 
-                    if len(func_res.parts) == 0 or func_res.parts is None:
-                        raise Exception("the parts list is empty")
-                    if func_res.parts[0].function_response is None:
-                        raise Exception("the FunctionResponse is somehow None")
-                    if func_res.parts[0].function_response.response is None:
-                        raise Exception("The func response's func response is None")
-                    print(f"-> {func_res.parts[0].function_response.response["result"]}")
+        func_results = []
+        for call in res.function_calls:
+            func_res = call_function(call)
+            if (
+                not func_res.parts
+                or not func_res.parts[0].function_response
+                or not func_res.parts[0].function_response.response
+            ):
+                raise RuntimeError(f"Empty function response for {call.name}")
+            
+            if prompt.verbose:
+                print(f"-> {func_res.parts[0].function_response.response}")
+            func_results.append(func_res.parts[0])
 
-        
-        print(res.text)
+        messages.append(types.Content(role="user", parts=func_results))
     
+    print("Maximum number of prompts reached")
+    exit(1)
 
 
 
