@@ -1,5 +1,5 @@
 import os
-
+from google.genai import types
 from config import *
 
 def get_file_content(working_directory, file_path):
@@ -28,3 +28,17 @@ def get_file_content(working_directory, file_path):
     return f"Error: The following error has occured...\n {e}"
 
   
+schema_get_file_content = types.FunctionDeclaration(
+  name="get_file_content",
+  description="Reads a file and returns a truncated version of it's contents",
+  parameters=types.Schema(
+    type=types.Type.OBJECT,
+    required=["file_path"],
+    properties={
+      "file_path": types.Schema(
+        type=types.Type.STRING,
+        description="Path to the target file, relative to the working directory."
+      )
+    }
+  ),
+)

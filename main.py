@@ -3,6 +3,8 @@ import argparse
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from functions.call_functions import *
+from prompts import *
 
 load_dotenv()
 
@@ -23,17 +25,42 @@ def prompt_client(prompt, key):
     client = genai.Client(api_key=key)
 
     messages = [types.Content(role="user", parts=[types.Part(text=prompt.user_prompt)])]
-    res = client.models.generate_content(model="gemini-2.5-flash", contents=messages)
+    for _ in range(20):
+        res = client.models.generate_content(
+            model="gemini-2.5-flash", 
+            contents=messages,
+            config=types.GenerateContentConfig(
+            tools=[available_functions], 
+            system_instruction=system_prompt
+            )
+        )
 
-    if res.usage_metadata == None:
-        raise RuntimeError("Response failed...")
+        if res.usage_metadata == None:
+            raise RuntimeError("Response failed...")
 
-    if prompt.verbose:
-        print(f"User prompt: {prompt.user_prompt}")
-        print(f"Prompt tokens: {res.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {res.usage_metadata.candidates_token_count}")
+        if prompt.verbose:
+            print(f"User prompt: {prompt.user_prompt}")
+            print(f"Prompt tokens: {res.usage_metadata.prompt_token_count}")
+            print(f"Response tokens: {res.usage_metadata.candidates_token_count}")
+
+            if res.function_calls is not None:
+                for call in res.function_calls:
+                    print(f"Calling function: {call.name}({call.args})")
+                    func_res = call_function(call)
+                    # print(func_res)
+
+                    if len(func_res.parts) == 0 or func_res.parts is None:
+                        raise Exception("the parts list is empty")
+                    if func_res.parts[0].function_response is None:
+                        raise Exception("the FunctionResponse is somehow None")
+                    if func_res.parts[0].function_response.response is None:
+                        raise Exception("The func response's func response is None")
+                    print(f"-> {func_res.parts[0].function_response.response["result"]}")
+
         
-    print(res.text)
+        print(res.text)
+    
+
 
 
 def main():
